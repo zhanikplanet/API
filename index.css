@@ -56,7 +56,6 @@ p {
 }
 
 .card {
-    background-color: rgba(153, 242, 243, 0.683) !important;
     display: table-row;
     max-height: none !important;
     max-width: none !important;
