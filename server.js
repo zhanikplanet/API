@@ -1,32 +1,36 @@
-const http = require('http');
 const express = require('express');
-const cors = require('cors'); 
+const http = require('http');
+const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsDoc = require('swagger-jsdoc');
-const swaggerOptions = require('./swagger-config'); 
+const swaggerOptions = require('./swagger-config');
+const { connectMongoDB } = require('./mongodb'); // Import the connectMongoDB function
+const sampleRoutes = require('./route/sample');
 
 const app = express();
 const server = http.createServer(app);
 
-
 app.use(cors());
+app.use(express.json()); // Add this line to parse JSON request bodies
 
+// Serve static files from the 'public' directory
+app.use(express.static('public'));
 
-app.use(express.static(__dirname));
-
-//it's to launch already in html file
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
-});
-
-//swagger of my endpoints but it's broken so i decide to create endpoint without swagger
+// Serve Swagger UI at /api-docs endpoint
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-//it's for my api url
-const sampleRoutes = require('./route/sample');
+// Use routes
 app.use('/api', sampleRoutes);
 
-
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Connect to MongoDB before starting the server
+connectMongoDB()
+  .then(() => {
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((error) => {
+    console.error('Failed to connect to MongoDB:', error);
+    process.exit(1); // Exit the application if MongoDB connection fails
+  });

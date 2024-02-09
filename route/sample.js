@@ -1,182 +1,230 @@
 const express = require('express');
-const axios = require('axios');
-const https = require('https');
 const router = express.Router();
+const { getStudents } = require('../mongodb');
+const { postStudents } = require('../mongodb');
+const { putStudents } = require('../mongodb');
+const { deleteStudents } = require('../mongodb');
 
-// Instead of using require, use dynamic import for node-fetch
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+//#region Get method
+/**
+ * @swagger
+ * /studentsGet:
+ *   get:
+ *     summary: Returns a greeting message
+ *     description: Returns a greeting message "Hello, World!"
+ *     responses:
+ *       200:
+ *         description: A successful response with the greeting message
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Hello, World!
+ */
 
-//#region Function: Location to Coordinates
-async function getLocationCoordinates(location) {
+router.get('/studentsGet', async (req, res) => {
   try {
-    const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
-      params: {
-        q: location,
-        appid: '57dba8ad7712d6516d9135b39240ed4e'
-      },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    });
-
-    const { lat, lon } = response.data.coord;
-    return { lat, lon };
+    const students = await getStudents();
+    res.json(students);
   } catch (error) {
-    console.error('Error fetching location coordinates:', error);
-    throw new Error('Unable to retrieve coordinates for the location');
-  }
-}
-//#endregion
-
-//#region Function: Fetch City Image from Unsplash API
-async function fetchCityImage(location) {
-  try {
-    const response = await fetch(`https://api.unsplash.com/photos/random?query=${location}&orientation=landscape`, {
-      headers: {
-        Authorization: 'Client-ID gcghIvkzOTGXhN5YL_syJz7oCyuGXmKN7RGUIVMuX8s' // Replace with your actual Unsplash Access Key (Client ID)
-      },
-      agent: new https.Agent({ rejectUnauthorized: false })
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      return data.urls.regular;
-    } else {
-      throw new Error(data.errors[0]);
-    }
-  } catch (error) {
-    throw error;
-  }
-}
-
-//#region Function City Information from OpenStreetMap
-async function getCityInfo(lat, lon) {
-  try {
-    const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching city information from OpenStreetMap:', error);
-    throw new Error('An error occurred while fetching city information from OpenStreetMap');
-  }
-}
-//#endregion
-
-//#region GET Weeather for 5 days
-router.get('/weather', async (req, res) => {
-  try {
-    const { location } = req.query;
-    if (!location) {
-      return res.status(400).json({ error: 'Location parameter is required' });
-    }
-
-    const { lat, lon } = await getLocationCoordinates(location);
-
-    const response = await axios.get('https://api.openweathermap.org/data/2.5/forecast', {
-      params: {
-        q:location,
-        appid: '57dba8ad7712d6516d9135b39240ed4e',
-        units: 'metric'
-      },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    });
-
-    const forecastData = response.data.list.map(item => ({
-      date: item.dt_txt,
-      temperature: item.main.temp,
-      description: item.weather[0].description
-    }));
-
-    res.json({ forecast: forecastData });
-  } catch (error) {
-    console.error('Error fetching weather data:', error);
-    res.status(500).json({ error: 'An error occurred while fetching weather data' });
+    console.error('Error retrieving students:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 //#endregion
 
-//#region GET CurrentWeather
-router.get('/currentweather', async (req, res) => {
+//#region Post method
+/**
+ * @swagger
+ * /studentPost:
+ *   post:
+ *     summary: Create Student
+ *     description: Creates a new student
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: The name of the student
+ *               email:
+ *                 type: string
+ *                 description: The email of the student
+ *               age:
+ *                 type: number
+ *                 description: The age of the student 
+ *     responses:
+ *       200:
+ *         description: A successful response indicating the student creation
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Student created successfully
+ */
+
+router.post('/studentPost', async (req, res) => {
   try {
-    const { lat, lon } = req.query;
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude parameters are required' });
-    }
-
-    const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
-      params: {
-        lat,
-        lon,
-        appid: '57dba8ad7712d6516d9135b39240ed4e',
-        units: 'metric'
-      },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    });
-
-    const currentWeatherData = {
-      temperature: response.data.main.temp,
-      description: response.data.weather[0].description
-    };
-
-    res.json({ currentWeather: currentWeatherData });
+    const { name, email, age } = req.body;
+    const students = await postStudents(name, email, age);
+    res.status(200).json({ message: 'Student created successfully', students });
   } catch (error) {
-    console.error('Error fetching current weather data:', error);
-    res.status(500).json({ error: 'An error occurred while fetching current weather data' });
+    console.error('Error creating student:', error);
+    res.status(200).json({ message: 'An error occurred, but the request was successful' });
   }
 });
 //#endregion
 
-//#region GET location
-router.get('/location', async (req, res) => {
+//#region Put method
+/**
+ * @swagger
+ * /studentPut/{email}:
+ *   put:
+ *     summary: Update Student
+ *     description: Updates an existing student
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         type: string
+ *         description: The email of the student to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: The name of the student
+ *               age:
+ *                 type: number
+ *                 description: The age of the student
+ *     responses:
+ *       200:
+ *         description: A successful response indicating the update of information about the student
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Student updated successfully
+ *                 student:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       description: The updated name of the student
+ *                     age:
+ *                       type: number
+ *                       description: The updated age of the student
+ *       404:
+ *         description: The specified student email was not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Student not found
+ *       500:
+ *         description: An error occurred while updating the student
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: An error occurred while updating the student
+ */ 
+
+router.put('/studentPut/:email', async (req, res) => {
   try {
-    const { location } = req.query;
-    if (!location) {
-      return res.status(400).json({ error: 'Location parameter is required' });
+    const { email } = req.params;
+    const { name, age } = req.body;
+    const updatedStudent = await putStudents(email, name, age);
+    if (!updatedStudent) {
+      return res.status(404).json({ error: 'Student not found' });
     }
-
-    const { lat, lon } = await getLocationCoordinates(location);
-
-    res.json({ coordinates: { lat, lon } });
+    res.status(200).json({ message: 'Student updated successfully', student: updatedStudent });
   } catch (error) {
-    console.error('Error fetching location coordinates:', error);
-    res.status(500).json({ error: 'An error occurred while fetching location coordinates' });
+    console.error('Error updating student:', error);
+    res.status(500).json({ error: 'An error occurred while updating the student' });
   }
 });
 //#endregion
 
-//#region GET City Image
-router.get('/city-image', async (req, res) => {
+//#region Delete method
+/**
+ * @swagger
+ * /studentDelete/{email}:
+ *   delete:
+ *     summary: Delete Student
+ *     description: Deletes an existing student
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         type: string
+ *         description: The email of the student to delete
+ *     responses:
+ *       200:
+ *         description: A successful response indicating the student deletion
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Student deleted successfully
+ *       404:
+ *         description: The specified student email was not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Student not found
+ *       500:
+ *         description: An error occurred while deleting the student
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: An error occurred while deleting the student
+ */
+
+router.delete('/studentDelete/:email', async (req, res) => {
   try {
-    const { location } = req.query;
-    if (!location) {
-      return res.status(400).json({ error: 'City name parameter is required' });
+    const { email } = req.params;
+    const deletedStudent = await deleteStudents(email);
+    if (!deletedStudent) {
+      return res.status(404).json({ error: 'Student not found' });
     }
-    
-    
-    const imageURL = await fetchCityImage(location);
-    
-   
-    res.json({ imageURL });
+    res.status(200).json({ message: 'Student deleted successfully' });
   } catch (error) {
-    console.error('Error fetching city image:', error);
-    res.status(500).json({ error: 'An error occurred while fetching city image' });
-  }
-});
-//#endregion
-
-
-
-//#region GET City Information
-router.get('/city-info', async (req, res) => {
-  try {
-    const { lat, lon } = req.query;
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude parameters are required' });
-    }
-
-    const cityInfo = await getCityInfo(lat, lon);
-
-    res.json({ cityInfo });
-  } catch (error) {
-    console.error('Error fetching city information:', error);
-    res.status(500).json({ error: 'An error occurred while fetching city information' });
+    console.error('Error deleting student:', error);
+    res.status(500).json({ error: 'An error occurred while deleting the student' });
   }
 });
 //#endregion
